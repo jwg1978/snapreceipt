@@ -249,10 +249,11 @@
       </div>
       <div class="setGroup">
         <h3>Google Drive auto-upload (optional)</h3>
-        <input type="text" id="clientId" placeholder="Google OAuth Client ID">
-        <p class="hint">With this set, kept receipts upload straight to Drive under
-        <b>Receipts/&lt;business&gt;</b>. Without it, use <b>Send</b> to share receipts
-        to the Drive app (or anywhere) at the end of a sitting.</p>
+        <input type="text" id="clientId" placeholder="Client ID (built-in default is set)">
+        <p class="hint">Kept receipts upload straight to Drive under
+        <b>Receipts/&lt;business&gt;</b>, and your business list syncs between devices
+        automatically. Leave the Client ID blank to use the built-in one. The <b>Send</b>
+        button always works as a fallback.</p>
         <button id="driveBtn" style="margin-top:10px">Connect Google Drive</button>
         <div id="driveStatus"></div>
       </div>
@@ -282,7 +283,9 @@ const store = (() => {
 })();
 
 // ---------- state ----------
-let businesses = JSON.parse(store.get("sr_biz") || '["GFT Trust"]');
+const DEFAULT_CLIENT_ID = "126657858032-lqbf4rgqqljg9pl6dih42gtk8r71b63a.apps.googleusercontent.com";
+const getClientId = () => (store.get("sr_clientId") || "").trim() || DEFAULT_CLIENT_ID;
+let businesses = JSON.parse(store.get("sr_biz") || '["GFT Trust","Karma Connections"]');
 let activeBiz  = store.get("sr_activeBiz") || businesses[0];
 if (!businesses.includes(activeBiz)) activeBiz = businesses[0];
 const receipts = [];          // {id, blob, thumbUrl, vendor, date, total, gst, biz, quality, uploaded}
@@ -575,7 +578,7 @@ $("keepBtn").onclick = async () => {
   r.thumbUrl = t.toDataURL("image/jpeg", 0.7);
   receipts.push(r);
   closeSheet(); renderList();
-  if (store.get("sr_clientId") && driveToken !== "declined") uploadToDrive(r);
+  if (getClientId() && driveToken !== "declined") uploadToDrive(r);
 };
 function closeSheet() { $("sheet").classList.remove("open"); if ($("previewImg").src) URL.revokeObjectURL($("previewImg").src); pending = null; }
 
@@ -617,7 +620,7 @@ function gsiReady() {
 function getDriveToken(interactive) {
   return new Promise(async (res, rej) => {
     try { await gsiReady(); } catch (e) { return rej(e); }
-    const cid = store.get("sr_clientId");
+    const cid = getClientId();
     if (!cid) return rej(new Error("No Client ID set."));
     const tc = google.accounts.oauth2.initTokenClient({
       client_id: cid,
@@ -662,9 +665,60 @@ async function uploadToDrive(r) {
     if (!res.ok) throw new Error("upload " + res.status);
     r.uploaded = true; renderList();
     toast(`Filed to Drive → Receipts/${r.biz}`);
+    if (!window._settingsSynced) { window._settingsSynced = true; syncSettings(driveToken); }
   } catch (e) {
     toast("Drive upload failed — receipt kept here. Use Send instead.", 3500);
   }
+}
+
+// ---------- cross-device settings sync (stored in Drive as snapreceipt-settings.json) ----------
+let syncTimer = null;
+async function syncSettings(token) {
+  try {
+    const q = encodeURIComponent("name='snapreceipt-settings.json' and trashed=false");
+    const found = await driveApi(`drive/v3/files?q=${q}&fields=files(id,modifiedTime)`, {}, token);
+    let fileId = found.files && found.files[0] && found.files[0].id;
+    let remote = null;
+    if (fileId) {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        { headers: { Authorization: "Bearer " + token } });
+      if (r.ok) remote = await r.json().catch(() => null);
+    }
+    const localUpdated = parseInt(store.get("sr_updatedAt") || "0", 10);
+    if (remote && Array.isArray(remote.businesses) && remote.businesses.length) {
+      const merged = [...new Set([...remote.businesses, ...businesses])].filter(Boolean);
+      const changed = merged.length !== businesses.length || merged.some((b,i) => b !== businesses[i]);
+      businesses = merged;
+      store.set("sr_biz", JSON.stringify(businesses));
+      if ((remote.updatedAt || 0) > localUpdated && remote.activeBiz && merged.includes(remote.activeBiz)) {
+        activeBiz = remote.activeBiz; store.set("sr_activeBiz", activeBiz);
+      }
+      if (changed) { renderChips(); }
+    }
+    const payload = JSON.stringify({ businesses, activeBiz, updatedAt: Date.now() });
+    if (fileId) {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: "PATCH",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: payload,
+      });
+    } else {
+      const root = await ensureFolder("Receipts", null, token);
+      const meta = { name: "snapreceipt-settings.json", parents: [root] };
+      const form = new FormData();
+      form.append("metadata", new Blob([JSON.stringify(meta)], { type: "application/json" }));
+      form.append("file", new Blob([payload], { type: "application/json" }));
+      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST", headers: { Authorization: "Bearer " + token }, body: form,
+      });
+    }
+    store.set("sr_updatedAt", String(Date.now()));
+  } catch {}
+}
+function queueSync() {
+  if (!driveToken || driveToken === "declined") return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncSettings(driveToken), 1500);
 }
 
 // ---------- settings ----------
@@ -688,8 +742,10 @@ function renderBizList() {
 function saveBiz() {
   businesses = businesses.filter(Boolean);
   store.set("sr_biz", JSON.stringify(businesses));
+  store.set("sr_updatedAt", String(Date.now()));
   if (!businesses.includes(activeBiz)) { activeBiz = businesses[0]; store.set("sr_activeBiz", activeBiz); }
   renderChips();
+  queueSync();
 }
 $("addBiz").onclick = () => { businesses.push("New business"); saveBiz(); renderBizList(); };
 $("settingsBtn").onclick = openSettings;
@@ -700,14 +756,17 @@ $("closeSettings").onclick = () => {
 };
 $("driveBtn").onclick = async () => {
   store.set("sr_clientId", $("clientId").value.trim());
-  try { driveToken = await getDriveToken(true); updateDriveStatus(); toast("Google Drive connected."); }
+  try {
+    driveToken = await getDriveToken(true);
+    await syncSettings(driveToken); renderBizList();
+    updateDriveStatus(); toast("Google Drive connected — settings synced.");
+  }
   catch (e) { $("driveStatus").innerHTML = `<span style="color:var(--bad)">Couldn't connect: ${esc(e.message)}</span>`; }
 };
 function updateDriveStatus() {
   $("driveStatus").innerHTML = driveToken && driveToken !== "declined"
-    ? '<span style="color:var(--good)">Connected — receipts auto-file to Drive.</span>'
-    : store.get("sr_clientId") ? '<span style="color:var(--text-dim)">Client ID saved — tap Connect to sign in.</span>'
-    : '<span style="color:var(--text-dim)">Not set up — the Send button still works.</span>';
+    ? '<span style="color:var(--good)">Connected — receipts auto-file to Drive and settings sync across devices.</span>'
+    : '<span style="color:var(--text-dim)">Ready — tap Connect to sign in with Google. Settings and businesses sync across your devices via Drive.</span>';
 }
 
 // ---------- boot ----------
