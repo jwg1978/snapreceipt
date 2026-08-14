@@ -39,6 +39,23 @@
   }
   header h1 { font-size: 1.25rem; margin: 0; font-weight: 700; letter-spacing: -0.02em; }
   header h1 span { color: var(--accent); }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; gap: 6px; padding: 4px; margin: 4px 18px 0; background: var(--surface); border-radius: 12px; }
+  .tabs button {
+    flex: 1; padding: 9px 8px; border: none; border-radius: 9px; cursor: pointer;
+    background: none; color: var(--text-dim); font-size: .95rem; font-weight: 700;
+    font-family: inherit; transition: all .15s ease; position: relative;
+  }
+  .tabs button.on { background: var(--surface-2); color: var(--text); }
+  .tabs button .pip {
+    display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px;
+    border-radius: 999px; background: var(--bad); color: #fff;
+    font-size: .7rem; line-height: 18px; vertical-align: 1px;
+  }
+  .tabs button .pip.soon { background: var(--warn); color: #241a05; }
+  .pane { display: none; }
+  .pane.on { display: block; }
   #settingsBtn {
     background: none; border: none; color: var(--text-dim);
     font-size: 1.3rem; padding: 6px; cursor: pointer;
@@ -192,6 +209,66 @@
   }
   .toast.show { opacity: 1; }
   input[type=file] { display: none; }
+
+  /* ---------- due list ---------- */
+  .grp { margin-top: 18px; }
+  .grp h3 {
+    font-size: .74rem; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--text-dim); margin: 0 0 8px; display: flex; align-items: center; gap: 8px;
+  }
+  .grp h3 .bar { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .grp.over h3 .bar { background: var(--bad); }
+  .grp.soon h3 .bar { background: var(--warn); }
+  .grp.ok h3 .bar { background: var(--good); }
+  .grp.none h3 .bar { background: #55636f; }
+  .due {
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    background: var(--surface); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+    border-left: 3px solid transparent;
+  }
+  .due:active { background: var(--surface-2); }
+  .due.over { border-left-color: var(--bad); }
+  .due.soon { border-left-color: var(--warn); }
+  .due .body { flex: 1; min-width: 0; }
+  .due .t { font-weight: 700; font-size: .97rem; }
+  .due .w { font-size: .82rem; color: var(--text-dim); margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .due .when { text-align: right; flex: none; }
+  .due .when .d { font-weight: 700; font-size: .9rem; }
+  .due .when .rel { font-size: .74rem; color: var(--text-dim); margin-top: 2px; }
+  .due.over .when .d { color: var(--bad); }
+  .due.soon .when .d { color: var(--warn); }
+  .due .when .set { font-size: .8rem; color: var(--accent); font-weight: 700; }
+  .filters { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 2px; scrollbar-width: none; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters .chip { white-space: nowrap; font-size: .85rem; padding: 6px 13px; }
+
+  /* ---------- due detail sheet ---------- */
+  #dueSheet { z-index: 55; justify-content: flex-end; }
+  #dueSheet .card2 {
+    background: var(--surface); border-radius: var(--radius) var(--radius) 0 0;
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+    max-height: 88%; overflow-y: auto;
+  }
+  #dueSheet h2 { margin: 0 0 2px; font-size: 1.2rem; }
+  #dueSheet .sub { color: var(--text-dim); font-size: .9rem; margin-bottom: 14px; }
+  #dueSheet .note { color: var(--text-dim); font-size: .85rem; line-height: 1.55; margin: 14px 0 0; }
+  #dueSheet label.fl { display: block; font-size: .68rem; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text-dim); margin-bottom: 5px; }
+  #dueSheet input[type=date] {
+    width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #2e3843;
+    background: var(--surface-2); color: var(--text); font-size: 1rem; font-family: inherit;
+  }
+  #dueSheet .btns { display: flex; gap: 10px; margin-top: 16px; }
+  #dueSheet .btns button {
+    flex: 1; padding: 15px 10px; border: none; border-radius: 999px;
+    font-size: .98rem; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  #doneBtn { background: var(--good); color: #fff; }
+  #closeDue { background: var(--surface-2); color: var(--text); }
+  .metaRow { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .metaRow span { font-size: .74rem; padding: 4px 10px; border-radius: 999px;
+    background: var(--surface-2); color: var(--text-dim); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -200,15 +277,27 @@
     <button id="settingsBtn" aria-label="Settings">&#9881;&#65039;</button>
   </header>
 
+  <div class="tabs" id="tabs">
+    <button data-pane="snap" class="on">Receipts</button>
+    <button data-pane="due">Due <span class="pip" id="duePip" style="display:none"></span></button>
+  </div>
+
   <main>
-    <div class="chips" id="chips"></div>
-    <div id="sessionBar"></div>
-    <div id="list"></div>
-    <div class="empty" id="empty">
-      <div class="big">&#129534;</div>
-      Pick a business, then snap a receipt.<br>
-      You'll know straight away if it's readable.
-    </div>
+    <section class="pane on" id="pane-snap">
+      <div class="chips" id="chips"></div>
+      <div id="sessionBar"></div>
+      <div id="list"></div>
+      <div class="empty" id="empty">
+        <div class="big">&#129534;</div>
+        Pick a business, then snap a receipt.<br>
+        You'll know straight away if it's readable.
+      </div>
+    </section>
+
+    <section class="pane" id="pane-due">
+      <div class="filters" id="dueFilters"></div>
+      <div id="dueList"></div>
+    </section>
   </main>
 
   <div id="bottomBar">
@@ -235,6 +324,23 @@
     <div class="sheetActions">
       <button id="retakeBtn">&#8634;&ensp;Retake</button>
       <button id="keepBtn" disabled>Keep</button>
+    </div>
+  </div>
+
+  <!-- due detail sheet -->
+  <div class="sheet" id="dueSheet">
+    <div style="flex:1" id="dueBackdrop"></div>
+    <div class="card2">
+      <h2 id="dueTitle"></h2>
+      <div class="sub" id="dueWho"></div>
+      <div class="metaRow" id="dueMeta"></div>
+      <label class="fl" for="dueDate">Next due</label>
+      <input type="date" id="dueDate">
+      <p class="note" id="dueNote"></p>
+      <div class="btns">
+        <button id="closeDue">Close</button>
+        <button id="doneBtn">Mark done &#10003;</button>
+      </div>
     </div>
   </div>
 
@@ -685,17 +791,29 @@ async function syncSettings(token) {
       if (r.ok) remote = await r.json().catch(() => null);
     }
     const localUpdated = parseInt(store.get("sr_updatedAt") || "0", 10);
+    const remoteNewer = remote && (remote.updatedAt || 0) > localUpdated;
     if (remote && Array.isArray(remote.businesses) && remote.businesses.length) {
-      const merged = [...new Set([...remote.businesses, ...businesses])].filter(Boolean);
-      const changed = merged.length !== businesses.length || merged.some((b,i) => b !== businesses[i]);
-      businesses = merged;
+      const mergedBiz = [...new Set([...remote.businesses, ...businesses])].filter(Boolean);
+      const changed = mergedBiz.length !== businesses.length || mergedBiz.some((b,i) => b !== businesses[i]);
+      businesses = mergedBiz;
       store.set("sr_biz", JSON.stringify(businesses));
-      if ((remote.updatedAt || 0) > localUpdated && remote.activeBiz && merged.includes(remote.activeBiz)) {
+      if (remoteNewer && remote.activeBiz && mergedBiz.includes(remote.activeBiz)) {
         activeBiz = remote.activeBiz; store.set("sr_activeBiz", activeBiz);
       }
       if (changed) { renderChips(); }
     }
-    const payload = JSON.stringify({ businesses, activeBiz, updatedAt: Date.now() });
+    // compliance edits: per-item last-write-wins, so two devices can both make changes
+    if (remote && remote.due && typeof remote.due === "object") {
+      let touched = false;
+      for (const [id, rv] of Object.entries(remote.due)) {
+        const lv = due[id];
+        if (!lv || (remoteNewer && JSON.stringify(lv) !== JSON.stringify(rv))) {
+          due[id] = { ...(lv || {}), ...rv }; touched = true;
+        }
+      }
+      if (touched) { store.set("sr_due", JSON.stringify(due)); renderDue(); }
+    }
+    const payload = JSON.stringify({ businesses, activeBiz, due, updatedAt: Date.now() });
     if (fileId) {
       await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
         method: "PATCH",
@@ -769,8 +887,215 @@ function updateDriveStatus() {
     : '<span style="color:var(--text-dim)">Ready — tap Connect to sign in with Google. Settings and businesses sync across your devices via Drive.</span>';
 }
 
+/* ============================================================
+   Compliance schedule — baseline data (edit in-app; edits sync via Drive)
+   ============================================================ */
+const SCHEDULE = [
+  {"id":"bas-quarterly-karma-connections-trust-on","c":"Tax","t":"BAS (quarterly)","w":"Karma Connections","f":"Quarterly","d":"2026-10-28","l":14,"n":"Due 28th of Oct/Feb/Apr/Jul. KCT only — the sole GST-registered entity. Claude preps figures 2 weeks out."},
+  {"id":"asic-annual-review-fee-gft-nominees-no-1","c":"Tax","t":"ASIC annual review + fee","w":"GFT Nominees","f":"Annual","d":"2027-04-20","l":30,"n":"Review date 20 Apr. Fee (last: $321) payable by 20 Jun."},
+  {"id":"solvency-resolution-s347a-gft-nominees-n","c":"Tax","t":"Solvency resolution (s347A)","w":"GFT Nominees","f":"Annual","d":"2027-06-20","l":30,"n":"Due within 2 months of 20 Apr review date. Drafting task fires 20 May."},
+  {"id":"asic-annual-review-fee-karma-connections","c":"Tax","t":"ASIC annual review + fee","w":"Karma Connections P/L","f":"Annual","d":"2026-10-01","l":30,"n":"Review date 1 Oct. Fee payable by 1 Dec."},
+  {"id":"solvency-resolution-s347a-karma-connecti","c":"Tax","t":"Solvency resolution (s347A)","w":"Karma Connections P/L","f":"Annual","d":"2026-12-01","l":30,"n":"Due within 2 months of 1 Oct review date. Drafting task fires 1 Nov."},
+  {"id":"trust-distribution-resolution-gilmour-fa","c":"Tax","t":"Trust distribution resolution","w":"Gilmour Family Trust","f":"Annual","d":"2027-06-30","l":29,"n":"Must be resolved before 30 Jun. Drafting task fires 1 Jun."},
+  {"id":"trust-distribution-resolution-karma-conn","c":"Tax","t":"Trust distribution resolution","w":"Karma Connections Trust","f":"Annual","d":"2027-06-30","l":29,"n":"Must be resolved before 30 Jun. Drafting task fires 1 Jun."},
+  {"id":"income-tax-returns-all-entities-personal","c":"Tax","t":"Income tax returns","w":"All entities","f":"Annual","d":null,"l":60,"n":"Due date depends on lodgment program / agent status — confirm with accountant."},
+  {"id":"building-landlord-insurance-bent-st","c":"Insurance","t":"Building/landlord insurance","w":"Bent St","f":"Annual","d":null,"l":42,"n":"Renewal date + insurer TBD."},
+  {"id":"building-home-insurance-bottlebrush-cr-9","c":"Insurance","t":"Building/home insurance","w":"Bottlebrush Cr","f":"Annual","d":null,"l":42,"n":""},
+  {"id":"building-landlord-insurance-illalangi","c":"Insurance","t":"Building/landlord insurance","w":"Illalangi","f":"Annual","d":null,"l":42,"n":""},
+  {"id":"building-commercial-insurance-edison-pla","c":"Insurance","t":"Building/commercial insurance","w":"Edison Plaza","f":"Annual","d":null,"l":42,"n":""},
+  {"id":"comprehensive-insurance-volvo-xc40","c":"Insurance","t":"Comprehensive insurance","w":"Volvo XC40","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"comprehensive-insurance-vw-amarok","c":"Insurance","t":"Comprehensive insurance","w":"VW Amarok","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"comprehensive-insurance-vw-golf","c":"Insurance","t":"Comprehensive insurance","w":"VW Golf","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"comprehensive-insurance-vw-eos","c":"Insurance","t":"Comprehensive insurance","w":"VW EOS","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"vehicle-rego-incl-ctp-green-slip-volvo-x","c":"Rego","t":"Vehicle rego (incl. CTP green slip)","w":"Volvo XC40","f":"Annual","d":null,"l":30,"n":"NSW rego requires CTP first; eSafety check if >5 yrs old."},
+  {"id":"vehicle-rego-incl-ctp-green-slip-vw-amar","c":"Rego","t":"Vehicle rego (incl. CTP green slip)","w":"VW Amarok","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"vehicle-rego-incl-ctp-green-slip-vw-golf","c":"Rego","t":"Vehicle rego (incl. CTP green slip)","w":"VW Golf","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"vehicle-rego-incl-ctp-green-slip-vw-eos","c":"Rego","t":"Vehicle rego (incl. CTP green slip)","w":"VW EOS","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"boat-registration-nsw-maritime-alcyone","c":"Rego","t":"Boat registration (NSW Maritime)","w":"Alcyone","f":"Annual","d":null,"l":30,"n":""},
+  {"id":"mooring-licence-fees-alcyone","c":"Boat","t":"Mooring licence fees","w":"Alcyone","f":"Annual","d":null,"l":30,"n":"NSW Maritime private mooring licence."},
+  {"id":"byron-bay-parking-permit-volvo-xc40","c":"Permits","t":"Byron Bay parking permit","w":"Volvo XC40","f":"Annual","d":null,"l":21,"n":"Byron Shire resident/ratepayer permit is per-vehicle."},
+  {"id":"byron-bay-parking-permit-vw-amarok","c":"Permits","t":"Byron Bay parking permit","w":"VW Amarok","f":"Annual","d":null,"l":21,"n":""},
+  {"id":"byron-bay-parking-permit-vw-golf","c":"Permits","t":"Byron Bay parking permit","w":"VW Golf","f":"Annual","d":null,"l":21,"n":""},
+  {"id":"byron-bay-parking-permit-vw-eos","c":"Permits","t":"Byron Bay parking permit","w":"VW EOS","f":"Annual","d":null,"l":21,"n":""},
+  {"id":"npws-country-parks-pass-volvo-xc40","c":"Permits","t":"NPWS country parks pass","w":"Volvo XC40","f":"Annual","d":null,"l":21,"n":"NSW National Parks annual pass is per-vehicle."},
+  {"id":"npws-country-parks-pass-vw-amarok","c":"Permits","t":"NPWS country parks pass","w":"VW Amarok","f":"Annual","d":null,"l":21,"n":""},
+  {"id":"npws-country-parks-pass-vw-golf","c":"Permits","t":"NPWS country parks pass","w":"VW Golf","f":"Annual","d":null,"l":21,"n":""},
+  {"id":"npws-country-parks-pass-vw-eos","c":"Permits","t":"NPWS country parks pass","w":"VW EOS","f":"Annual","d":null,"l":21,"n":""},
+  {"id":"passport-expiry-john-gilmour","c":"Personal","t":"Passport expiry","w":"John Gilmour","f":"10-yearly","d":null,"l":270,"n":"Renew ~9 months out — many countries require 6 months validity."},
+  {"id":"passport-expiry-ragna-gilmour","c":"Personal","t":"Passport expiry","w":"Ragna Gilmour","f":"10-yearly","d":null,"l":270,"n":"Add children's passports if applicable (5-yearly for minors)."},
+  {"id":"visa-expiry-tbd-specify-visas-held","c":"Personal","t":"Visa expiry","w":"(specify visas)","f":"Varies","d":null,"l":90,"n":""},
+  {"id":"driver-licence-expiry-john-gilmour","c":"Personal","t":"Driver licence expiry","w":"John Gilmour","f":"5/10-yearly","d":null,"l":60,"n":""},
+  {"id":"driver-licence-expiry-ragna-gilmour","c":"Personal","t":"Driver licence expiry","w":"Ragna Gilmour","f":"5/10-yearly","d":null,"l":60,"n":""},
+  {"id":"boat-driving-licence-john-gilmour","c":"Personal","t":"Boat driving licence","w":"John Gilmour","f":"Varies","d":null,"l":60,"n":"If held — NSW boat driving licence expiry."},
+  {"id":"aviation-medical-casa-john-gilmour","c":"Personal","t":"Aviation medical (CASA)","w":"John Gilmour","f":"1–4 yearly by class","d":null,"l":60,"n":"Validity depends on certificate class and age."},
+  {"id":"membership-renewal-tbd-list-memberships","c":"Personal","t":"Membership renewal","w":"(list memberships)","f":"Annual","d":null,"l":30,"n":"Add one row per membership (clubs, professional bodies, roadside assist etc.)."},
+  {"id":"acnc-annual-information-statement-ais-su","c":"Charity","t":"ACNC Annual Information Statement (AIS)","w":"Sustain-Ed","f":"Annual","d":"2026-12-31","l":60,"n":"CONFIRMED via ACNC register: FY end 30 Jun, next report due 31 Dec 2026. Established 21 Aug 2024. Lodge via ACNC Charity Portal."},
+  {"id":"annual-financial-report-reviewed-audited","c":"Charity","t":"Annual financial report (reviewed/audited)","w":"Sustain-Ed","f":"Annual","d":null,"l":60,"n":"Charity established Aug 2024 — likely small (<$500k: AIS only, no financial report). Confirm revenue tier."},
+  {"id":"agm-treasurer-s-report-sustain-ed","c":"Charity","t":"AGM + treasurer's report","w":"Sustain-Ed","f":"Annual","d":null,"l":45,"n":"Per constitution / incorporation rules — confirm AGM month."}
+];
+
+// John's edits: { id: {d: "YYYY-MM-DD"|null, done: "YYYY-MM-DD"} }
+let due = JSON.parse(store.get("sr_due") || "{}");
+let dueFilter = "All";
+let currentDue = null;
+
+const DAY = 86400000;
+function today0() { const t = new Date(); t.setHours(0,0,0,0); return t; }
+function parseD(s) { if (!s) return null; const [y,m,d] = s.split("-").map(Number);
+  const dt = new Date(y, m-1, d); dt.setHours(0,0,0,0); return isNaN(dt) ? null : dt; }
+function fmtD(dt) { return dt.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "2-digit" }); }
+function isoD(dt) { return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`; }
+
+// merged view of one schedule item
+function merged(s) {
+  const o = due[s.id] || {};
+  const d = ("d" in o) ? o.d : s.d;
+  const dt = parseD(d);
+  const days = dt ? Math.round((dt - today0()) / DAY) : null;
+  const lead = Math.max(s.l || 30, 30);   // never let something inside a month read as "Later"
+  let kind = "none";
+  if (days !== null) kind = days < 0 ? "over" : days <= lead ? "soon" : "ok";
+  return { ...s, d, dt, days, kind, doneAt: o.done || null };
+}
+function allDue() { return SCHEDULE.map(merged); }
+
+// roll a date forward one cycle when an item is ticked off
+function nextCycle(dt, freq) {
+  const n = new Date(dt);
+  const f = (freq || "").toLowerCase();
+  if (f.startsWith("quarter")) n.setMonth(n.getMonth() + 3);
+  else if (f.startsWith("month")) n.setMonth(n.getMonth() + 1);
+  else if (f.startsWith("10")) n.setFullYear(n.getFullYear() + 10);
+  else if (f.startsWith("5/10")) n.setFullYear(n.getFullYear() + 5);
+  else n.setFullYear(n.getFullYear() + 1);
+  return n;
+}
+
+function relText(days) {
+  if (days === null) return "";
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days < 0) return `${-days} day${days === -1 ? "" : "s"} ago`;
+  if (days < 45) return `in ${days} days`;
+  const m = Math.round(days / 30.44);
+  return m < 12 ? `in ${m} mo` : `in ${(days/365).toFixed(days > 700 ? 0 : 1)} yr`;
+}
+
+function renderDue() {
+  // filter chips
+  const cats = ["All", ...new Set(SCHEDULE.map(s => s.c))];
+  const fbox = $("dueFilters"); fbox.innerHTML = "";
+  cats.forEach(c => {
+    const el = document.createElement("div");
+    el.className = "chip" + (c === dueFilter ? " active" : "");
+    el.textContent = c;
+    el.onclick = () => { dueFilter = c; renderDue(); };
+    fbox.appendChild(el);
+  });
+
+  const items = allDue().filter(s => dueFilter === "All" || s.c === dueFilter);
+  const groups = [
+    ["over", "Overdue", s => s.kind === "over"],
+    ["soon", "Coming up", s => s.kind === "soon"],
+    ["ok",   "Later",     s => s.kind === "ok"],
+    ["none", "No date yet", s => s.kind === "none"],
+  ];
+  const box = $("dueList"); box.innerHTML = "";
+  groups.forEach(([cls, label, test]) => {
+    const list = items.filter(test).sort((a,b) =>
+      a.dt && b.dt ? a.dt - b.dt : a.t.localeCompare(b.t));
+    if (!list.length) return;
+    const g = document.createElement("div");
+    g.className = "grp " + cls;
+    g.innerHTML = `<h3><span class="bar"></span>${label} &middot; ${list.length}</h3>`;
+    list.forEach(s => {
+      const row = document.createElement("div");
+      row.className = "due " + cls;
+      row.innerHTML = `
+        <div class="body">
+          <div class="t">${esc(s.t)}</div>
+          <div class="w">${esc(s.w)}</div>
+        </div>
+        <div class="when">${ s.dt
+          ? `<div class="d">${fmtD(s.dt)}</div><div class="rel">${relText(s.days)}</div>`
+          : `<div class="set">Set date</div>` }</div>`;
+      row.onclick = () => openDue(s.id);
+      g.appendChild(row);
+    });
+    box.appendChild(g);
+  });
+  if (!box.children.length) box.innerHTML = '<div class="empty">Nothing in this category.</div>';
+
+  // tab badge: overdue count, else soon count
+  const all = allDue();
+  const over = all.filter(s => s.kind === "over").length;
+  const soon = all.filter(s => s.kind === "soon").length;
+  const pip = $("duePip");
+  if (over) { pip.textContent = over; pip.className = "pip"; pip.style.display = ""; }
+  else if (soon) { pip.textContent = soon; pip.className = "pip soon"; pip.style.display = ""; }
+  else pip.style.display = "none";
+}
+
+function openDue(id) {
+  const s = merged(SCHEDULE.find(x => x.id === id));
+  currentDue = id;
+  $("dueTitle").textContent = s.t;
+  $("dueWho").textContent = s.w;
+  $("dueMeta").innerHTML =
+    `<span>${esc(s.c)}</span><span>${esc(s.f)}</span><span>reminder ${s.l} days out</span>` +
+    (s.doneAt ? `<span style="color:var(--good)">last done ${fmtD(parseD(s.doneAt))}</span>` : "");
+  $("dueDate").value = s.d || "";
+  $("dueNote").textContent = s.n || "";
+  $("doneBtn").style.display = s.d ? "" : "none";
+  $("dueSheet").classList.add("open");
+}
+function closeDue() { $("dueSheet").classList.remove("open"); currentDue = null; }
+
+function setDue(id, patch) {
+  due[id] = { ...(due[id] || {}), ...patch };
+  store.set("sr_due", JSON.stringify(due));
+  store.set("sr_updatedAt", String(Date.now()));
+  renderDue(); queueSync();
+}
+
+$("dueDate").addEventListener("change", e => {
+  if (!currentDue) return;
+  setDue(currentDue, { d: e.target.value || null });
+  $("doneBtn").style.display = e.target.value ? "" : "none";
+  toast(e.target.value ? "Date saved." : "Date cleared.");
+});
+$("doneBtn").onclick = () => {
+  if (!currentDue) return;
+  const s = merged(SCHEDULE.find(x => x.id === currentDue));
+  if (!s.dt) return;
+  const next = nextCycle(s.dt, s.f);
+  setDue(currentDue, { d: isoD(next), done: isoD(today0()) });
+  closeDue();
+  toast(`Done — next due ${fmtD(next)}.`);
+};
+$("closeDue").onclick = closeDue;
+$("dueBackdrop").onclick = closeDue;
+
+// ---------- tabs ----------
+$("tabs").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-pane]");
+  if (!btn) return;
+  const pane = btn.dataset.pane;
+  [...$("tabs").children].forEach(b => b.classList.toggle("on", b === btn));
+  $("pane-snap").classList.toggle("on", pane === "snap");
+  $("pane-due").classList.toggle("on", pane === "due");
+  $("bottomBar").style.display = pane === "snap" ? "flex" : "none";
+  if (pane === "due") renderDue();
+});
+
 // ---------- boot ----------
-renderChips(); renderList();
+renderChips(); renderList(); renderDue();
+// pull settings + compliance edits from Drive on launch (silent if not yet connected)
+setTimeout(async () => {
+  if (!getClientId()) return;
+  try { driveToken = await getDriveToken(false); await syncSettings(driveToken); updateDriveStatus(); }
+  catch {}
+}, 400);
 // warm the OCR engine in the background so the first receipt is fast
 setTimeout(() => { getOcrWorker().catch(() => {}); }, 800);
 </script>
